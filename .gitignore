@@ -1,0 +1,48 @@
+# Segredos (nunca publicar; os modelos .example ficam no Git)
+.env
+.env.*
+!.env.example
+api/config.php
+
+# Dependências
+node_modules/
+vendor/
+
+# Build e cache
+app/dist/
+dist/
+.vite/
+.eslintcache
+*.tsbuildinfo
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Gerenciadores de pacote alternativos (o projeto usa npm / package-lock.json)
+yarn.lock
+pnpm-lock.yaml
+
+# Editores e IDEs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Arquivos temporários e backups locais
+*.tmp
+*.bak
+*.orig
+
+# Claude Code (configurações locais)
+.claude/settings.local.json
