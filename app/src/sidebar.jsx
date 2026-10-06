@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './sidebar.css';
 
-export default function Sidebar({ onSair }) {
+export default function Sidebar({ onSair, onMudarPagina }) {
   // Estado para controlar se o menu está aberto ou fechado
   const [isOpen, setIsOpen] = useState(false);
 
@@ -21,6 +21,11 @@ export default function Sidebar({ onSair }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen]);
 
+  const handleNavegacao = (pagina) => {
+    closeMenu();
+    onMudarPagina(pagina);
+  };
+
   return (
     <div className="app-container">
 
@@ -39,13 +44,13 @@ export default function Sidebar({ onSair }) {
 
       <nav id="menu-principal" className={`sidebar ${isOpen ? 'open' : ''}`} inert={!isOpen}>
         <ul>
-          <li><a href="#home" onClick={closeMenu}>Meu perfil</a></li>
-          <li><a href="#services" onClick={closeMenu}>Mudar Local</a></li>
-          <li><a href="#portfolio" onClick={closeMenu}>Col. Seletiva</a></li>
-          <li><a href="#contact" onClick={closeMenu}>Configurações</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); handleNavegacao('mapa'); }}>Meu perfil</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); handleNavegacao('mudarlocal'); }}>Mudar Local</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); handleNavegacao('colseletiva'); }}>Col. Seletiva</a></li>
+          <li><a href="#" onClick={(e) => { e.preventDefault(); handleNavegacao('configuracoes'); }}>Configurações</a></li>
           <li>
             <a
-              href="#contact"
+              href="#"
               onClick={(event) => {
                 event.preventDefault();
                 closeMenu();

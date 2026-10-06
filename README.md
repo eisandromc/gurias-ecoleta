@@ -11,6 +11,7 @@ Projeto do grupo **2025-2MA-cidadeconectada-G01**. Equipe: Ana, Camila, Duda e E
 - [Tecnologias](#tecnologias)
 - [Pré-requisitos](#pré-requisitos)
 - [Configuração](#configuração)
+- [Checklist: Windows com XAMPP](#checklist-windows-com-xampp)
 - [Como rodar](#como-rodar)
 - [Como funciona](#como-funciona)
 - [Referência das APIs](#referência-das-apis)
@@ -28,7 +29,6 @@ O projeto tem três partes:
 | --- | --- | --- |
 | `app/` | O aplicativo: login, cadastro e o mapa com a rota do caminhão. | React (Vite) + servidor Node.js (Express) |
 | `api/` | API de usuários: cadastro, login e endereço do usuário. | PHP + MySQL, servida pelo Apache |
-| `db/` | Backup completo do banco (`script.sql`), com dados de exemplo. | SQL (MariaDB/MySQL) |
 | `website/` | Site institucional: apresentação do projeto, da equipe e páginas próprias de login e cadastro. | HTML, CSS e PHP |
 
 O caminho de quem usa o aplicativo:
@@ -67,23 +67,25 @@ O navegador nunca chama a pasta `api/` diretamente. Tudo passa pelo servidor Exp
 ```text
 ecoleta/
 ├── README.md               este arquivo
+├── .env                    configuração única (banco, Apache, portas, tokens)
+├── .env.example            modelo comentado do .env
+├── env.php                 leitor do .env para a api e o website (PHP)
+├── .htaccess               impede o Apache de servir o .env
 ├── .gitignore
-├── db/
-│   └── script.sql          backup do banco do grupo (phpMyAdmin), com usuários de teste
 ├── api/                    API PHP
 │   ├── usuarios.php        cadastro, login e manutenção de usuários
 │   ├── dados_usuario.php   endereço do usuário logado e do caminhão (constante CAMINHAO)
 │   ├── database.sql        estrutura do banco
-│   ├── config.exemplo.php  modelo do config.php (token interno)
+│   ├── config.php          configuração da API, lida do .env
 │   └── classes/
 │       ├── Api.php         resposta JSON e verificação do token
 │       ├── Database.php    conexão com o MySQL
 │       ├── Endereco.php    consulta ao ViaCEP
 │       └── Usuarios.php    operações na tabela usuarios
 ├── app/                    aplicativo
-│   ├── .env.example        modelo do .env
 │   ├── package.json
 │   ├── server/
+│   │   ├── env.js          carrega o .env da raiz
 │   │   ├── index.js        servidor Express: rota, dados do usuário, atualização ao vivo
 │   │   ├── auth.js         login, cadastro e sessão
 │   │   ├── auth.test.js    testes automatizados (npm test)
@@ -102,7 +104,7 @@ ecoleta/
 └── website/                site institucional
     ├── inicio.html, projeto.html
     ├── login.php, cadastro.php, act/   formulários e processamento
-    └── conexao.php         conexão com o MySQL
+    └── conexao.php         conexão com o MySQL (dados do .env)
 ```
 
 ## Tecnologias
@@ -143,24 +145,18 @@ A pasta pública do Apache do Homebrew é `/opt/homebrew/var/www`.
 
 ## Configuração
 
-Faça estes passos uma vez, na primeira instalação. Os comandos partem da raiz do projeto (a pasta `ecoleta/`), exceto onde indicado.
+Faça estes passos uma vez, na primeira instalação. Os comandos partem da pasta `ecoleta/`, exceto onde indicado.
 
-### 1. Baixe o projeto e coloque-o na pasta pública do Apache
+### 1. Coloque o projeto na pasta pública do Apache
 
-O repositório se chama `gurias-ecoleta`, mas o `.env.example` espera que a pasta se chame `ecoleta`. Clone já com esse nome, dentro da pasta pública do Apache:
-
-```bash
-git clone <URL-do-repositório> ecoleta
-```
-
-Pastas públicas:
+Copie ou clone a pasta `ecoleta` para dentro da pasta pública do Apache:
 
 - macOS (Homebrew): `/opt/homebrew/var/www/ecoleta`
 - Windows (XAMPP): `C:\xampp\htdocs\ecoleta`
 
 Confira se a API responde. Abra `http://localhost/ecoleta/api/usuarios.php` no navegador; deve aparecer `{"sucesso":false,"mensagem":"Acesso não autorizado."}`. Essa é a resposta certa, porque a API recusa quem não envia o token.
 
-> Se o seu Apache usa outra porta ou outra pasta (por exemplo, `http://localhost:8080/meu-projeto/`), anote o endereço: ele vai no `.env` do passo 5.
+> Se o seu Apache usa outra porta ou outra pasta (por exemplo, `http://localhost:8080/meu-projeto/`), anote a porta e o caminho: eles vão no `.env` do passo 3.
 
 ### 2. Crie o banco de dados
 
@@ -168,65 +164,94 @@ Confira se a API responde. Abra `http://localhost/ecoleta/api/usuarios.php` no n
 mysql -uroot < api/database.sql
 ```
 
-Isso cria o banco `ecoleta` e a tabela `usuarios`, se ainda não existirem. Esse é o caminho mínimo para o app funcionar. No XAMPP, você também pode abrir o phpMyAdmin (`http://localhost/phpmyadmin`), ir em **Importar** e escolher o arquivo `api/database.sql`.
-
-> **Alternativa:** `db/script.sql` é um backup do banco usado pelo grupo. Ele traz usuários de teste e outras tabelas (`bairros`, `caminhoes`, `ecopontos`, `logradouros`, `programacoes_coleta`) que o app ainda não usa. Ele não cria o banco nem as colunas de endereço (`Logradouro`, `Bairro`, `Cidade`, `Uf`); se preferir usá-lo, crie o banco `ecoleta`, importe o arquivo nele e rode o `ALTER TABLE` abaixo.
+Isso cria o banco `ecoleta` e a tabela `usuarios`, se ainda não existirem. No XAMPP, você também pode abrir o phpMyAdmin (`http://localhost/phpmyadmin`), ir em **Importar** e escolher o arquivo `api/database.sql`.
 
 Se a tabela `usuarios` já existia sem as colunas de endereço, rode o `ALTER TABLE` que está no comentário do início de `api/database.sql`.
 
-### 3. Confira o usuário e a senha do MySQL
+### 3. Revise o `.env`
 
-O projeto usa o usuário `root` sem senha, o padrão do XAMPP e do MySQL do Homebrew. Se o seu for diferente, altere nos dois arquivos:
-
-- `api/classes/Database.php` (usado pelo app)
-- `website/conexao.php` (usado pelo site)
-
-### 4. Crie o `api/config.php`
-
-Copie o modelo:
+Toda a configuração fica num único arquivo, o `.env` da raiz do projeto. Ele é lido pelo app (Node), pela api e pelo website (PHP), então o token e os dados do banco nunca ficam diferentes entre eles. Se o arquivo não existir, copie o modelo:
 
 ```bash
-cp api/config.exemplo.php api/config.php          # macOS / Linux
-copy api\config.exemplo.php api\config.php        # Windows
+cp .env.example .env          # macOS / Linux
+copy .env.example .env        # Windows
 ```
 
-Gere um token:
+| Variável | O que colocar |
+| --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Acesso ao MySQL. Padrão do XAMPP e do Homebrew: `localhost`, `3306`, `ecoleta`, `root`, sem senha. |
+| `APACHE_HOST`, `APACHE_PORT` | Onde o Apache responde. `80` no Apache padrão; `8080` se o XAMPP foi configurado assim. |
+| `API_PATH` | Caminho da pasta `api` no Apache. Padrão: `/ecoleta/api`. |
+| `PORT` | Porta do servidor Express. Padrão: `8787`. |
+| `SESSION_SECRET` | Chave que assina o cookie de sessão. |
+| `INTERNAL_API_TOKEN` | Token que o app envia à api. Use um valor diferente do `SESSION_SECRET`. |
+| `ORS_API_KEY` | Token do openrouteservice: crie uma conta em <https://openrouteservice.org/dev/#/signup> e copie o token do painel. |
+
+Para gerar `SESSION_SECRET` e `INTERNAL_API_TOKEN`:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Cole o valor em `token_interno`, no `api/config.php`. Esse arquivo não vai para o Git.
+Depois de alterar o `.env`, reinicie o `npm run dev`. A api e o website leem o arquivo a cada requisição.
 
-### 5. Crie o `app/.env`
+> O `.env` é versionado no Git. Se o repositório for público, troque `SESSION_SECRET`, `INTERNAL_API_TOKEN` e `ORS_API_KEY` por valores que não sejam os da produção.
+
+### 4. Instale as dependências do app
 
 ```bash
 cd app
-cp .env.example .env          # macOS / Linux
-copy .env.example .env        # Windows
-```
-
-Preencha:
-
-| Variável | O que colocar |
-| --- | --- |
-| `ORS_API_KEY` | Token do openrouteservice: crie uma conta em <https://openrouteservice.org/dev/#/signup> e copie o token do painel. |
-| `PORT` | Porta do servidor Express. Padrão: `8787`. |
-| `USER_API_URL` | Endereço do `dados_usuario.php`. Padrão: `http://localhost/ecoleta/api/dados_usuario.php`. |
-| `USUARIOS_API_URL` | Endereço do `usuarios.php`. Padrão: `http://localhost/ecoleta/api/usuarios.php`. |
-| `SESSION_SECRET` | Um token novo, gerado com o mesmo comando do passo 4. |
-| `INTERNAL_API_TOKEN` | **O mesmo valor** de `token_interno` do `api/config.php`. |
-| `USER_API_FILE` | Opcional: caminho do `dados_usuario.php` que o servidor observa. Padrão: `../api/dados_usuario.php`. |
-
-O `.env` não vai para o Git.
-
-### 6. Instale as dependências do app
-
-Ainda dentro da pasta `app/`:
-
-```bash
 npm install
 ```
+
+## Checklist: Windows com XAMPP
+
+Para instalar o projeto numa máquina com Windows 11 e XAMPP. Os caminhos supõem o XAMPP em `C:\xampp` e o Apache na porta `8080`. Se o seu Apache usa a porta 80, troque `8080` por `80` nos itens abaixo.
+
+### Programas
+
+- [ ] XAMPP com **PHP 8.1 ou superior** (o código usa recursos do PHP 8.1). Confira com `C:\xampp\php\php.exe -v`.
+- [ ] Node.js 20.19+ ou 22.12+. Confira com `node -v`, num terminal aberto depois da instalação.
+
+### Apache na porta 8080
+
+- [ ] Em `C:\xampp\apache\conf\httpd.conf`: `Listen 8080` e `ServerName localhost:8080`.
+- [ ] No mesmo arquivo, o bloco `<Directory "C:/xampp/htdocs">` tem `AllowOverride All` (é o padrão do XAMPP). Sem isso, o `.htaccess` que protege o `.env` é ignorado.
+- [ ] Apache iniciado no painel do XAMPP, mostrando a porta 8080.
+
+### PHP
+
+- [ ] Em `C:\xampp\php\php.ini`, as linhas `extension=curl`, `extension=pdo_mysql` e `extension=mbstring` estão sem `;` no começo.
+- [ ] No mesmo arquivo, `curl.cainfo` aponta para um arquivo que existe, por exemplo `curl.cainfo="C:\xampp\apache\bin\curl-ca-bundle.crt"`. Sem isso, a consulta ao ViaCEP (HTTPS) falha e o cadastro não encontra o CEP.
+- [ ] Depois de alterar o `httpd.conf` ou o `php.ini`, pare e inicie o Apache de novo.
+
+### MySQL
+
+- [ ] MySQL iniciado no painel do XAMPP (porta 3306).
+- [ ] Banco importado: em `http://localhost:8080/phpmyadmin`, **Importar** → arquivo `api/database.sql`.
+- [ ] O banco `ecoleta` aparece com a tabela `usuarios`.
+
+### Projeto
+
+- [ ] Pasta em `C:\xampp\htdocs\ecoleta`, com `api`, `app`, `website` e o `.env` direto dentro dela.
+- [ ] `http://localhost:8080/ecoleta/api/usuarios.php` mostra `{"sucesso":false,"mensagem":"Acesso não autorizado."}`.
+- [ ] `http://localhost:8080/ecoleta/.env` mostra **Forbidden**. Se mostrar o conteúdo do arquivo, os segredos estão expostos: confira o `AllowOverride All` acima.
+
+### `.env`, na raiz `C:\xampp\htdocs\ecoleta`
+
+- [ ] O arquivo existe. Se não, crie com `copy .env.example .env`.
+- [ ] `APACHE_PORT=8080` e `API_PATH=/ecoleta/api`.
+- [ ] `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=root` e `DB_PASSWORD` vazio (padrão do XAMPP). No Windows, use `127.0.0.1` em vez de `localhost`: com `localhost` o PHP tenta antes o IPv6 e cada conexão ao banco pode atrasar cerca de 1 segundo.
+- [ ] `SESSION_SECRET`, `INTERNAL_API_TOKEN` e `ORS_API_KEY` preenchidos.
+- [ ] Não há outro `.env` dentro de `app\`. Só o da raiz é lido.
+
+### App
+
+- [ ] Em `C:\xampp\htdocs\ecoleta`, no PowerShell ou no Prompt de Comando: `npm install` (instala também as dependências da pasta `app`).
+- [ ] `npm run dev` mostra `API PHP em http://localhost:8080/ecoleta/api`. Se a porta não for 8080, o `.env` não foi lido ou está errado.
+- [ ] Se o Windows perguntar sobre o firewall para o Node.js, permita em redes privadas.
+- [ ] `http://localhost:5173` abre o login, o cadastro com um CEP real funciona e, depois do login, o mapa mostra a rota do caminhão.
+- [ ] O site abre em `http://localhost:8080/ecoleta/website/inicio.html`.
 
 ## Como rodar
 
@@ -235,11 +260,10 @@ npm install
 Com Apache, PHP e MySQL ligados:
 
 ```bash
-cd app
 npm run dev
 ```
 
-Esse comando sobe o servidor Express (porta 8787) e o Vite. Abra **<http://localhost:5173>**. Alterações no código aparecem na hora no navegador; alterações em `app/server/` exigem parar (Ctrl+C) e rodar de novo.
+Funciona tanto na raiz `ecoleta/` quanto dentro de `app/`: o `package.json` da raiz só repassa os comandos (`dev`, `build`, `preview`, `test`, `lint`) para a pasta `app`. Esse comando sobe o servidor Express (porta 8787) e o Vite. Abra **<http://localhost:5173>**. Alterações no código aparecem na hora no navegador; alterações em `app/server/` exigem parar (Ctrl+C) e rodar de novo.
 
 ### Aplicativo em produção
 
@@ -316,7 +340,7 @@ Com o mapa aberto, a página mantém uma conexão com o servidor (Server-Sent Ev
 
 ### API PHP (`api/`, só para o servidor Express)
 
-Toda chamada precisa do cabeçalho `X-Api-Token` com o valor de `api/config.php`. Sem ele, a resposta é 403.
+Toda chamada precisa do cabeçalho `X-Api-Token` com o valor de `INTERNAL_API_TOKEN` do `.env`. Sem ele, a resposta é 403.
 
 | Arquivo | Chamada | Descrição |
 | --- | --- | --- |
@@ -347,7 +371,7 @@ O app e o site gravam na mesma tabela.
 - **Tentativas de login:** depois de 10 senhas erradas para o mesmo e-mail e IP, o login fica bloqueado por 15 minutos.
 - **API PHP:** só aceita chamadas com o token interno, então não dá para usá-la direto pelo navegador para ler, alterar ou excluir usuários.
 - **Senhas:** guardadas com hash bcrypt.
-- **Segredos:** `.env` e `api/config.php` ficam fora do Git (veja o `.gitignore`). Nunca publique esses arquivos; se vazarem, gere valores novos.
+- **Segredos:** ficam todos no `.env`, que é versionado. O `.htaccess` impede o Apache de entregá-lo pelo navegador (no Apache do Homebrew, que vem com `AllowOverride None`, adicione a mesma regra no `httpd.conf`). Se vazarem, gere valores novos.
 
 ## Testes
 
@@ -363,8 +387,8 @@ Os testes automatizados usam uma API PHP simulada, então não precisam de Apach
 
 | Sintoma | Causa provável | Como resolver |
 | --- | --- | --- |
-| "Não foi possível conectar ao serviço de usuários" no login | Apache desligado. | Ligue o Apache e confira o passo 1. |
-| "O serviço de usuários está indisponível no momento" no login | URL errada no `.env` ou token diferente entre `.env` e `api/config.php`. | Confira `USUARIOS_API_URL`, `USER_API_URL` e `INTERNAL_API_TOKEN`. O terminal do `npm run dev` mostra o motivo exato. |
+| "Não foi possível conectar ao serviço de usuários" no login | Apache desligado ou `APACHE_PORT`/`API_PATH` errados. | Ligue o Apache e confira o passo 1 e o `.env`. |
+| "O serviço de usuários está indisponível no momento" no login | A api recusou o token ou respondeu com erro. | Confira se existe um único `.env`, na raiz, e reinicie o `npm run dev`. O terminal mostra o endereço da API em uso e o motivo exato. |
 | `{"sucesso":false,"mensagem":"Acesso não autorizado."}` | Chamada à API PHP sem o token certo. | É o esperado no navegador. No app, confira se os dois tokens são iguais. |
 | "Erro interno do servidor" no cadastro ou login | MySQL desligado, ou usuário e senha do banco errados. | Ligue o MySQL e confira o passo 3. |
 | "Configure ORS_API_KEY…" ou a rota não é calculada | `ORS_API_KEY` vazia ou inválida. | Preencha a chave no `.env` e reinicie o `npm run dev`. |
@@ -377,8 +401,7 @@ Os testes automatizados usam uma API PHP simulada, então não precisam de Apach
 
 - **Localização aproximada:** o CEP não traz o número da casa. Um campo "Número" no cadastro deixaria o ponto de coleta mais exato.
 - **Um só caminhão, em Porto Alegre:** o endereço é fixo em `api/dados_usuario.php`, e a posição no mapa é uma animação. Usuários de outras cidades terão rotas longas.
-- **Login do site e do app são diferentes:** o site (`website/`) entra pelo **nome de usuário** e grava o CEP como foi digitado, sem validar. O app entra pelo **e-mail** e confere o CEP. Os dois usam a mesma tabela.
-- **E-mail sem índice único:** a tabela não impede e-mails repetidos. O app recusa duplicados no próprio cadastro, mas o site não. Para impedir de vez, remova os duplicados e crie um índice único na coluna `Email`.
+- **Login do site e do app:** o site (`website/`) aceita **nome de usuário ou e-mail**; o app, só o **e-mail**. O cadastro dos dois segue as mesmas regras (o site usa a classe `Usuario` da `api`), então uma conta criada num entra no outro.
+- **E-mail sem índice único:** o site e o app recusam e-mails repetidos no cadastro, mas a tabela em si não impede. Para garantir de vez, remova duplicados antigos e crie um índice único na coluna `Email`.
 - **Recuperação de senha:** o botão "Esqueceu a senha?" do app ainda não tem fluxo; a ação `recuperarSenha` da API troca a senha sem confirmação por e-mail.
-- **Menu do app:** os itens "Meu perfil", "Mudar Local", "Col. Seletiva" e "Configurações" ainda não têm telas. "Sair do Perfil" funciona.
-- **PHP do site:** `website/act/*.php` usa `FILTER_SANITIZE_STRING`, que está obsoleto desde o PHP 8.1 e gera avisos.
+- **Menu do app:** "Mudar Local", "Col. Seletiva" e "Configurações" abrem telas vazias, prontas para receber conteúdo (`app/src/Pages/Mapa/MudarLocal.jsx`, `ColSeletiva.jsx` e `Configuracoes.jsx`). "Meu perfil" volta ao mapa e "Sair do Perfil" encerra a sessão.

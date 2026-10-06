@@ -1,5 +1,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import Sidebar from '../../sidebar'
+import MudarLocal from './MudarLocal'
+import ColSeletiva from './ColSeletiva'
+import Configuracoes from './Configuracoes'
 import './Mapa.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
@@ -30,8 +33,8 @@ const BIN_ICON = L.divIcon({
 })
 
 const ROUTE_STYLE = { color: '#1a1a1a', weight: 3, opacity: 0.9, dashArray: '6 8', lineCap: 'round' }
-const CLOCK_TICK_MS = 30_000
-const STREAM_RETRY_MS = 3_000
+const CLOCK_TICK_MS = 5_000
+const STREAM_RETRY_MS = 1_000
 const FOLLOW_TRUCK_ZOOM = 17
 
 function createRouteRequest(usuario) {
@@ -252,6 +255,7 @@ function Chevron({ direction }) {
 }
 
 function Mapa({ usuarioId, onSair, onSessaoExpirada }) {
+  const [pagina, setPagina] = useState('mapa')
   const [routeState, setRouteState] = useState(() => readCachedRoute(usuarioId))
   const [streamAttempt, setStreamAttempt] = useState(0)
   const [usuario, setUsuario] = useState(null)
@@ -404,6 +408,26 @@ function Mapa({ usuarioId, onSair, onSessaoExpirada }) {
     if (routeState?.request !== routeSignature || Date.now() - routeState.savedAt > ROUTE_CACHE_MAX_AGE_MS) calculateRoute(usuario)
   }, [calculateRoute, routeState, usuario])
 
+  // Renderizar páginas diferentes baseado no estado 'pagina'
+  if (pagina !== 'mapa') {
+    return (
+      <div className='app app-pagina'>
+        <header className='topo'>
+          <a className='marca' href='#home' aria-label='Ecoleta, voltar ao mapa' onClick={(event) => { event.preventDefault(); setPagina('mapa') }}>
+            <img className='marca-icone' src={caminhaoUrl} alt='' />
+            <span className='marca-nome'>ÉCOLETA</span>
+          </a>
+          <Sidebar onSair={onSair} onMudarPagina={setPagina} />
+        </header>
+
+        {pagina === 'mudarlocal' && <MudarLocal onVoltar={() => setPagina('mapa')} />}
+        {pagina === 'colseletiva' && <ColSeletiva onVoltar={() => setPagina('mapa')} />}
+        {pagina === 'configuracoes' && <Configuracoes onVoltar={() => setPagina('mapa')} />}
+      </div>
+    )
+  }
+
+  // Renderizar página de mapa padrão
   return (
     <div className='app'>
       <header className='topo'>
@@ -411,7 +435,7 @@ function Mapa({ usuarioId, onSair, onSessaoExpirada }) {
           <img className='marca-icone' src={caminhaoUrl} alt='' />
           <span className='marca-nome'>ÉCOLETA</span>
         </a>
-        <Sidebar onSair={onSair} />
+        <Sidebar onSair={onSair} onMudarPagina={setPagina} />
       </header>
 
       <main className='mapa-area' aria-label='Mapa da rota do caminhão'>

@@ -1,7 +1,8 @@
-import 'dotenv/config'
+import { ENV_FILE } from './env.js'
 import express from 'express'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAuth } from './auth.js'
@@ -10,18 +11,20 @@ const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const port = Number(process.env.PORT || 8787)
 const apiKey = process.env.ORS_API_KEY?.trim()
-const USER_API_URL = process.env.USER_API_URL?.trim() || 'http://localhost/ecoleta/api/dados_usuario.php'
+// Endereço da API PHP no Apache, montado com APACHE_HOST, APACHE_PORT e API_PATH do .env.
+const API_BASE_URL = `http://${process.env.APACHE_HOST?.trim() || 'localhost'}:${process.env.APACHE_PORT?.trim() || '80'}${process.env.API_PATH?.trim() || '/ecoleta/api'}`.replace(/\/+$/, '')
+const USER_API_URL = process.env.USER_API_URL?.trim() || `${API_BASE_URL}/dados_usuario.php`
 const USER_API_FILE = path.resolve(process.env.USER_API_FILE?.trim() || path.join(currentDirectory, '..', '..', 'api', 'dados_usuario.php'))
 const USER_API_TIMEOUT_MS = 10_000
-const USUARIOS_API_URL = process.env.USUARIOS_API_URL?.trim() || 'http://localhost/ecoleta/api/usuarios.php'
+const USUARIOS_API_URL = process.env.USUARIOS_API_URL?.trim() || `${API_BASE_URL}/usuarios.php`
 const SESSION_SECRET = process.env.SESSION_SECRET?.trim() || crypto.randomBytes(32).toString('hex')
-// Token que a API PHP (pasta api) exige no cabeçalho X-Api-Token (mesmo valor de api/config.php).
+// Token que a API PHP (pasta api) exige no cabeçalho X-Api-Token (o mesmo INTERNAL_API_TOKEN do .env).
 const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN?.trim() || ''
 if (!INTERNAL_API_TOKEN) {
-  console.warn('INTERNAL_API_TOKEN não definido no .env: a API PHP (pasta api) vai recusar as chamadas.')
+  console.warn(`INTERNAL_API_TOKEN não definido em ${ENV_FILE}: a API PHP (pasta api) vai recusar as chamadas.`)
 }
 if (!process.env.SESSION_SECRET?.trim()) {
-  console.warn('SESSION_SECRET não definido no .env: as sessões serão perdidas quando o servidor reiniciar.')
+  console.warn(`SESSION_SECRET não definido em ${ENV_FILE}: as sessões serão perdidas quando o servidor reiniciar.`)
 }
 // O opcache do PHP leva até ~2s para enxergar o arquivo salvo, então o servidor consulta de novo algumas vezes.
 const USER_FILE_REFETCH_DELAYS_MS = [150, 1000, 2500, 4000]
@@ -41,6 +44,7 @@ const DEFAULT_RESTRICTIONS = {
 }
 
 app.use(express.json({ limit: '50kb' }))
+app.disable('x-powered-by')
 
 const auth = createAuth({ usuariosApiUrl: USUARIOS_API_URL, secret: SESSION_SECRET, internalToken: INTERNAL_API_TOKEN })
 auth.registerRoutes(app)
@@ -166,6 +170,83 @@ async function geocode(place) {
   }
 }
 
+// Respostas do openrouteservice guardadas em arquivo: localizar um endereço com rua leva ~5s, e os
+// endereços e a rota entre eles quase não mudam (o serviço não usa trânsito em tempo real).
+// Fica fora do projeto porque o Apache serviria o arquivo, que tem endereços de usuários.
+const ORS_CACHE_FILE = path.join(os.tmpdir(), 'ecoleta-ors-cache.json')
+const GEOCODE_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const ROUTE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000
+const orsCache = loadOrsCache()
+const pendingOrsRequests = new Map()
+
+function loadOrsCache() {
+  try {
+    return new Map(Object.entries(JSON.parse(fs.readFileSync(ORS_CACHE_FILE, 'utf8'))))
+  } catch {
+    return new Map()
+  }
+}
+
+function saveOrsCache() {
+  for (const [key, entry] of orsCache) {
+    if (Date.now() - entry.savedAt > GEOCODE_CACHE_MAX_AGE_MS) orsCache.delete(key)
+  }
+  try {
+    fs.writeFileSync(ORS_CACHE_FILE, JSON.stringify(Object.fromEntries(orsCache)), { mode: 0o600 })
+  } catch (error) {
+    console.warn(`Não foi possível salvar o cache do openrouteservice: ${error.message}`)
+  }
+}
+
+function cachedOrsRequest(key, maxAgeMs, request) {
+  const cached = orsCache.get(key)
+  if (cached && Date.now() - cached.savedAt < maxAgeMs) return Promise.resolve(cached.result)
+
+  // Pedidos simultâneos iguais esperam a mesma consulta.
+  if (!pendingOrsRequests.has(key)) {
+    pendingOrsRequests.set(key, request()
+      .then((result) => {
+        orsCache.set(key, { result, savedAt: Date.now() })
+        saveOrsCache()
+        return result
+      })
+      .finally(() => pendingOrsRequests.delete(key)))
+  }
+  return pendingOrsRequests.get(key)
+}
+
+function geocodeCached(place) {
+  const key = JSON.stringify([place.address, place.neighbourhood, place.locality, place.region].map((value) => value.toLowerCase()))
+  return cachedOrsRequest(key, GEOCODE_CACHE_MAX_AGE_MS, () => geocode(place))
+}
+
+async function fetchTruckRoute(start, end, restrictions) {
+  const route = await orsRequest(`${ORS_DIRECTIONS_URL}/driving-hgv/geojson`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/geo+json' },
+    body: JSON.stringify({
+      coordinates: [start, end],
+      language: 'pt',
+      instructions: true,
+      units: 'km',
+      elevation: false,
+      options: {
+        vehicle_type: 'hgv',
+        profile_params: { restrictions },
+      },
+    }),
+  })
+  if (!route?.features?.[0]) {
+    throw createHttpError('O openrouteservice retornou uma rota inválida.', 502)
+  }
+  return route
+}
+
+function truckRouteCached(start, end, restrictions) {
+  const key = `route:${JSON.stringify([start, end, restrictions])}`
+  return cachedOrsRequest(key, ROUTE_CACHE_MAX_AGE_MS, () => fetchTruckRoute(start, end, restrictions))
+}
+
 app.get('/api/health', (_request, response) => {
   response.json({ ok: true, apiKeyConfigured: Boolean(apiKey) })
 })
@@ -281,26 +362,8 @@ app.post('/api/route', auth.requireSession, async (request, response, next) => {
 
     const restrictions = parseVehicle(vehicle)
     assertApiKey()
-    const [start, end] = await Promise.all([geocode(originPlace), geocode(destinationPlace)])
-
-    const route = await orsRequest(`${ORS_DIRECTIONS_URL}/driving-hgv/geojson`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/geo+json' },
-      body: JSON.stringify({
-        coordinates: [start.coordinates, end.coordinates],
-        language: 'pt',
-        instructions: true,
-        units: 'km',
-        elevation: false,
-        options: {
-          vehicle_type: 'hgv',
-          profile_params: { restrictions },
-        },
-      }),
-    })
-    if (!route?.features?.[0]) {
-      throw createHttpError('O openrouteservice retornou uma rota inválida.', 502)
-    }
+    const [start, end] = await Promise.all([geocodeCached(originPlace), geocodeCached(destinationPlace)])
+    const route = await truckRouteCached(start.coordinates, end.coordinates, restrictions)
 
     response.json({ start, end, route, restrictions })
   } catch (error) {
@@ -340,5 +403,6 @@ app.listen(port, (error) => {
     return
   }
   console.log(`Servidor disponível em http://localhost:${port}`)
+  console.log(`API PHP em ${API_BASE_URL} (configuração: ${ENV_FILE})`)
   watchUserApiFile()
 })

@@ -32,16 +32,16 @@
         <p>Preencha os dados solicitados abaixo para ter acesso a uma conta no nosso site</p>
 
         <label for="usuario">Nome de Usuário</label>
-        <input type="text" id="usuario" name="usuario" placeholder="Digite seu nome de usuário" required>
+        <input type="text" id="usuario" name="usuario" placeholder="Digite seu nome de usuário" maxlength="20" required>
 
         <label for="email">E-mail</label>
-        <input type="email" id="email" name="email" placeholder="Digite seu e-mail" required>
+        <input type="email" id="email" name="email" placeholder="Digite seu e-mail" maxlength="150" required>
 
         <label for="senha">Senha</label>
-        <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required>
+        <input type="password" id="senha" name="senha" placeholder="Digite sua senha" minlength="6" required>
 
         <label for="cep">CEP</label>
-        <input type="text" id="cep" name="cep" placeholder="Digite seu CEP" required>
+        <input type="text" id="cep" name="cep" placeholder="00000-000" inputmode="numeric" pattern="\d{5}-?\d{3}" maxlength="9" required>
 
         <button type="submit">CRIAR</button>
         

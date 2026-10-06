@@ -32,8 +32,8 @@
         <h2>Login</h2>
         <p>Preencha os dados solicitados abaixo para ter acesso a sua conta no nosso site</p>
  
-        <label for="usuario">Nome de Usuário</label>
-        <input type="text" id="usuario" name="usuario" placeholder="Digite seu nome de usuário" required>
+        <label for="usuario">Nome de Usuário ou E-mail</label>
+        <input type="text" id="usuario" name="usuario" placeholder="Digite seu nome de usuário ou e-mail" required>
  
         <label for="senha">Senha</label>
         <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required>

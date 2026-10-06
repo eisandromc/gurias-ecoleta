@@ -1,39 +1,37 @@
 <?php
+ini_set('display_errors', '0');
+header('Content-Type: text/html; charset=UTF-8');
+
 session_start();
 include_once '../conexao.php';
 
-$usuario = filter_input(INPUT_POST, 'usuario', FILTER_SANITIZE_STRING);
-$senha = filter_input(INPUT_POST, 'senha', FILTER_SANITIZE_STRING);
+$usuario = trim((string) filter_input(INPUT_POST, 'usuario'));
+$senha = (string) filter_input(INPUT_POST, 'senha');
 
-if ($usuario && $senha) {
+if ($usuario === '' || $senha === '') {
+    echo "Preencha todos os campos obrigatórios.";
+    exit;
+}
 
-    $query = "SELECT UsuarioID, Nome, Senha FROM usuarios WHERE Nome = :usuario LIMIT 1";
-    $stmt = $conexao->prepare($query);
-    $stmt->bindParam(':usuario', $usuario);
-    $stmt->execute();
+try {
+    // Aceita nome de usuário ou e-mail. Nomes podem se repetir, então confere a senha de cada um.
+    $stmt = $conexao->prepare("SELECT UsuarioID, Nome, Senha FROM usuarios WHERE Nome = :nome OR Email = :email ORDER BY UsuarioID");
+    $stmt->execute([':nome' => $usuario, ':email' => $usuario]);
 
-    if ($stmt->rowCount() == 1) {
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $user) {
         if (password_verify($senha, $user['Senha'])) {
-
-            echo "Bem-vindo de volta!"; // ← AQUI
-
+            session_regenerate_id(true);
             $_SESSION['usuario_id'] = $user['UsuarioID'];
             $_SESSION['usuario_nome'] = $user['Nome'];
 
-            header("Refresh: 1; URL=../inicio.html"); 
+            header("Refresh: 1; URL=../inicio.html");
+            echo "Bem-vindo de volta!";
             exit;
-
-        } else {
-            echo "Senha incorreta.";
         }
-
-    } else {
-        echo "Erro ao realizar o login. Tente novamente.";
     }
 
-} else {
-    echo "Preencha todos os campos obrigatórios.";
+    echo "Usuário ou senha inválidos.";
+} catch (Throwable $e) {
+    error_log("website login: " . $e->getMessage());
+    echo "Não foi possível fazer o login agora. Tente novamente.";
 }
-?>

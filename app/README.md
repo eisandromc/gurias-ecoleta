@@ -7,7 +7,7 @@ A documentação completa (configuração, como rodar, APIs e solução de probl
 Resumo, dentro desta pasta:
 
 ```bash
-cp .env.example .env   # preencha os valores (veja o README principal)
+# a configuração fica no .env da raiz do projeto (veja o README principal)
 npm install
 npm run dev            # http://localhost:5173
 npm test               # testes automatizados

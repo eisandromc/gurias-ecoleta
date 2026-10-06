@@ -392,3 +392,13 @@
     top: calc(var(--bola) * .5 + 4px);
   }
 }
+
+/* Páginas do menu (Mudar Local, Col. Seletiva, Configurações): topo + conteúdo, sem o painel da rota */
+.app-pagina {
+  grid-template-rows: var(--altura-topo) minmax(0, 1fr);
+}
+
+.app-pagina .auth {
+  min-height: 0;
+  overflow-y: auto;
+}

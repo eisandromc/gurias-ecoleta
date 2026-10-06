@@ -1,5 +1,5 @@
 // Carrega o .env aqui para o Express e o Vite (proxy de /api) usarem a mesma PORT.
-import 'dotenv/config'
+import './env.js'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
